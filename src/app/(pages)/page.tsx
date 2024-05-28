@@ -1,4 +1,5 @@
-import MediaGallery from '@/components/MediaGallery';
+import MediaGallery from "@/components/MediaGallery";
+import { v2 as cloudinary } from "cloudinary";
 
 export default async function Home() {
   return (
@@ -6,10 +7,10 @@ export default async function Home() {
       <MediaGallery
         resources={[
           {
-            id: 'my-image'
-          }
+            id: "my-image",
+          },
         ]}
       />
     </div>
-  )
+  );
 }

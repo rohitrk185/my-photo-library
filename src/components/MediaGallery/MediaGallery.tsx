@@ -58,6 +58,8 @@ const MediaGallery = ({
 
   const { resources, addResources } = useResources({ initialResources, tag });
 
+  console.log(tag, { initialResources, resources });
+
   const [selected, setSelected] = useState<Array<string>>([]);
   const [creation, setCreation] = useState<Creation>();
 

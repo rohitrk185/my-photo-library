@@ -37,7 +37,11 @@ export async function POST(request: Request) {
   await checkStatus(backgroundRemovedUrl);
 
   const uploadOptions: Record<string, string | boolean | string[]> = {};
-  uploadOptions.tags = ["background-removed", `original-${publicId}`];
+  uploadOptions.tags = [
+    "background-removed",
+    `original-${publicId}`,
+    String(process.env.NEXT_PUBLIC_CREATIONS_TAG),
+  ];
 
   const results = await cloudinary.uploader.upload(
     backgroundRemovedUrl,

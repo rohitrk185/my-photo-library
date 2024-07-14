@@ -15,7 +15,12 @@ export function useResources(options?: UseResourcesPropType) {
   const { data: resources } = useQuery({
     queryKey: ["resources", tag],
     queryFn: async () => {
-      const res = await fetch("/api/resources");
+      const res = await fetch("/api/resources", {
+        method: "GET",
+        body: JSON.stringify({
+          tags: [tag],
+        }),
+      });
       const { data } = await res.json();
 
       return data;

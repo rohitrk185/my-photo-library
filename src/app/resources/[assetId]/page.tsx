@@ -22,8 +22,6 @@ async function Resource({
     },
   );
 
-  console.log(resources);
-
   return <MediaViewer resource={resources[0]} />;
 }
 

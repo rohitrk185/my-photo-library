@@ -1,4 +1,3 @@
-import MediaGallery from "@/components/MediaGallery";
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
@@ -7,18 +6,11 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-export default async function Home() {
+export async function GET() {
   const { resources } = await cloudinary.api.resources_by_tag(
     String(process.env.NEXT_PUBLIC_CLOUDINARY_LIBRARY_TAG),
   );
-  console.log(resources);
-
-  return (
-    <div className="h-full mt-6">
-      <MediaGallery
-        resources={resources}
-        tag={String(process.env.NEXT_PUBLIC_CLOUDINARY_LIBRARY_TAG)}
-      />
-    </div>
-  );
+  return Response.json({
+    data: resources,
+  });
 }

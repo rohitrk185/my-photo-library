@@ -1,14 +1,14 @@
-import '@/app/globals.css';
-import { Image } from 'lucide-react'
+import "@/app/globals.css";
+import { Image, Sparkles } from "lucide-react";
 
-import Nav from '@/components/Nav';
-import Footer from '@/components/Footer';
-import SidebarLinks from '@/components/SidebarLinks';
+import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
+import SidebarLinks from "@/components/SidebarLinks";
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <div className="grid grid-rows-[auto_1fr_auto] h-screen">
@@ -19,15 +19,20 @@ export default function RootLayout({
             links={[
               {
                 icon: <Image className="w-5 h-5" />,
-                label: 'Photos',
-                path: '/'
-              }
+                label: "Photos",
+                path: "/",
+              },
+              {
+                icon: <Sparkles className="w-5 h-5" />,
+                label: "Creations",
+                path: "/creations",
+              },
             ]}
           />
         </aside>
-        <div>{ children }</div>
+        <div>{children}</div>
       </main>
       <Footer />
     </div>
-  )
+  );
 }

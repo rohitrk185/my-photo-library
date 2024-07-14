@@ -1,21 +1,66 @@
-'use client';
+"use client";
 
-import {  useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { Blend, ChevronLeft, ChevronDown, Crop, Info, Pencil, Trash2, Wand2, Image, Ban } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import {
+  Blend,
+  ChevronLeft,
+  ChevronDown,
+  Crop,
+  Info,
+  Pencil,
+  Trash2,
+  Wand2,
+  Image,
+  Ban,
+  PencilRuler,
+  ScissorsSquare,
+  Square,
+  RectangleHorizontal,
+  RectangleVertical,
+  Loader2,
+} from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import Container from '@/components/Container';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import Container from "@/components/Container";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CloudinaryResouce } from "@/types/cloudinary";
+import { CldImageProps, getCldImageUrl } from "next-cloudinary";
+import CldImage from "@/components/CldImage";
+import { useRouter } from "next/navigation";
+
+import { formatBytes, addCommas } from "@/lib/utils";
 
 interface Deletion {
   state: string;
 }
 
-const MediaViewer = ({ resource }: { resource: { id: string; width: number; height: number; } }) => {
+const MediaViewer = ({ resource }: { resource: CloudinaryResouce }) => {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
   const sheetFiltersRef = useRef<HTMLDivElement | null>(null);
   const sheetInfoRef = useRef<HTMLDivElement | null>(null);
 
@@ -24,6 +69,54 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
   const [filterSheetIsOpen, setFilterSheetIsOpen] = useState(false);
   const [infoSheetIsOpen, setInfoSheetIsOpen] = useState(false);
   const [deletion, setDeletion] = useState<Deletion>();
+
+  const [version, setVersion] = useState<number>(1);
+  const [enhancement, setEnhancement] = useState<string>();
+  const [crop, setCrop] = useState<string>();
+  const [filter, setFilter] = useState<string>();
+
+  type TransformationsType = Omit<CldImageProps, "src" | "alt">;
+  const transformations: TransformationsType = {};
+
+  if (enhancement === "restore") {
+    transformations.restore = true;
+  } else if (enhancement === "improve") {
+    transformations.improve = true;
+  } else if (enhancement === "remove-background") {
+    transformations.removeBackground = true;
+  }
+
+  if (crop === "square") {
+    if (resource.height > resource.width) {
+      transformations.height = resource.width;
+    } else {
+      transformations.width = resource.height;
+    }
+    transformations.crop = {
+      source: true,
+      type: "fill",
+    };
+  } else if (crop === "landscape") {
+    transformations.height = Math.floor(resource.width / (16 / 9));
+    transformations.crop = {
+      source: true,
+      type: "fit",
+    };
+  } else if (crop === "portrait") {
+    transformations.width = Math.floor(resource.height / (16 / 9));
+    transformations.crop = {
+      source: true,
+      type: "fit",
+    };
+  }
+
+  if (typeof filter === "string" && ["grayscale", "sepia"].includes(filter)) {
+    transformations[filter as keyof TransformationsType] = true;
+  } else if (typeof filter === "string" && ["sizzle"].includes(filter)) {
+    transformations["art"] = filter;
+  }
+
+  const hasTransformations = Object.entries(transformations).length > 0;
 
   // Canvas sizing based on the image dimensions. The tricky thing about
   // showing a single image in a space like this in a responsive way is trying
@@ -41,14 +134,14 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
 
   const imgStyles: Record<string, string | number> = {};
 
-  if ( isLandscape ) {
+  if (isLandscape) {
     imgStyles.maxWidth = resource.width;
-    imgStyles.width = '100%';
-    imgStyles.height = 'auto';
-  } else if ( isPortrait || isSquare ) {
+    imgStyles.width = "100%";
+    imgStyles.height = "auto";
+  } else if (isPortrait || isSquare) {
     imgStyles.maxHeight = resource.height;
-    imgStyles.height = '100vh';
-    imgStyles.width = 'auto'
+    imgStyles.height = "100vh";
+    imgStyles.width = "auto";
   }
 
   /**
@@ -57,9 +150,15 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
    */
 
   function closeMenus() {
-    setFilterSheetIsOpen(false)
-    setInfoSheetIsOpen(false)
-    setDeletion(undefined)
+    setFilterSheetIsOpen(false);
+    setInfoSheetIsOpen(false);
+    setDeletion(undefined);
+  }
+
+  function discardChanges() {
+    setEnhancement(undefined);
+    setFilter(undefined);
+    setCrop(undefined);
   }
 
   /**
@@ -68,7 +167,7 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
 
   function handleOnDeletionOpenChange(isOpen: boolean) {
     // Reset deletion dialog if the user is closing it
-    if ( !isOpen ) {
+    if (!isOpen) {
       setDeletion(undefined);
     }
   }
@@ -79,34 +178,134 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
   // multiple elements
 
   useEffect(() => {
-    document.body.addEventListener('click', handleOnOutsideClick)
+    document.body.addEventListener("click", handleOnOutsideClick);
     return () => {
-      document.body.removeEventListener('click', handleOnOutsideClick)
-    }
+      document.body.removeEventListener("click", handleOnOutsideClick);
+    };
   }, []);
 
   function handleOnOutsideClick(event: MouseEvent) {
-    const excludedElements = Array.from(document.querySelectorAll('[data-exclude-close-on-click="true"]'));
-    const clickedExcludedElement = excludedElements.filter(element => event.composedPath().includes(element)).length > 0;
+    const excludedElements = Array.from(
+      document.querySelectorAll('[data-exclude-close-on-click="true"]'),
+    );
+    const clickedExcludedElement =
+      excludedElements.filter((element) =>
+        event.composedPath().includes(element),
+      ).length > 0;
 
-    if ( !clickedExcludedElement ) {
+    if (!clickedExcludedElement) {
       closeMenus();
     }
   }
 
+  function invalidateQueries() {
+    queryClient.invalidateQueries({
+      queryKey: [
+        "resources",
+        String(process.env.NEXT_PUBLIC_CLOUDINARY_LIBRARY_TAG),
+      ],
+    });
+  }
+
+  async function handleOnSave() {
+    const url = getCldImageUrl({
+      width: resource.width,
+      height: resource.height,
+      src: resource.secure_url,
+      format: "default",
+      quality: "default",
+      ...transformations,
+    });
+
+    await fetch(url);
+
+    const results = await fetch("/api/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        publicId: resource.public_id,
+        url,
+      }),
+    }).then((res) => res.json());
+
+    invalidateQueries();
+
+    closeMenus();
+    discardChanges();
+    setVersion(Date.now());
+  }
+
+  async function handleOnSaveCopy() {
+    const url = getCldImageUrl({
+      width: resource.width,
+      height: resource.height,
+      src: resource.secure_url,
+      format: "default",
+      quality: "default",
+      ...transformations,
+    });
+
+    await fetch(url);
+
+    const { data } = await fetch("/api/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        url,
+      }),
+    }).then((res) => res.json());
+
+    invalidateQueries();
+
+    router.push(`/resources/${data.asset_id}`);
+  }
+
+  async function handleOnDelete() {
+    setDeletion({
+      state: "deleting",
+    });
+
+    await fetch("/api/delete", {
+      method: "POST",
+      body: JSON.stringify({
+        publicId: resource.public_id,
+      }),
+    });
+
+    invalidateQueries();
+
+    router.replace("/");
+  }
+
   return (
     <div className="h-screen bg-black px-0">
-
       {/** Modal for deletion */}
 
-      <Dialog open={!!deletion?.state} onOpenChange={handleOnDeletionOpenChange}>
+      <Dialog
+        open={
+          !!deletion?.state && ["deleting", "confirm"].includes(deletion.state)
+        }
+        onOpenChange={handleOnDeletionOpenChange}
+      >
         <DialogContent data-exclude-close-on-click={true}>
           <DialogHeader>
-            <DialogTitle className="text-center">Are you sure you want to delete?</DialogTitle>
+            <DialogTitle className="text-center">
+              Are you sure you want to delete?
+            </DialogTitle>
           </DialogHeader>
           <DialogFooter className="justify-center sm:justify-center">
-            <Button variant="destructive">
-              <Trash2 className="h-4 w-4 mr-2" /> Delete
+            <Button
+              variant="destructive"
+              onClick={() => {
+                handleOnDelete;
+              }}
+              disabled={deletion?.state === "deleting"}
+            >
+              {deletion?.state === "deleting" ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin disabled:opacity-75" />
+              ) : null}
+              {deletion?.state === "confirm" ? (
+                <Trash2 className="h-4 w-4 mr-2" />
+              ) : null}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -137,42 +336,174 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
             </TabsList>
             <TabsContent value="enhance">
               <SheetHeader className="my-4">
-                <SheetTitle className="text-zinc-400 text-sm font-semibold">Enhancements</SheetTitle>
+                <SheetTitle className="text-zinc-400 text-sm font-semibold">
+                  enhancement
+                </SheetTitle>
               </SheetHeader>
               <ul className="grid gap-2">
                 <li>
-                  <Button variant="ghost" className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 border-white`}>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${!enhancement ? "border-white" : "border-transparent"}`}
+                    onClick={() => setEnhancement(undefined)}
+                  >
                     <Ban className="w-5 h-5 mr-3" />
                     <span className="text-[1.01rem]">None</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${enhancement === "improve" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setEnhancement("improve")}
+                  >
+                    <Wand2 className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Improve</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${enhancement === "restore" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setEnhancement("restore")}
+                  >
+                    <PencilRuler className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Restore</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${enhancement === "remove-background" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setEnhancement("remove-background")}
+                  >
+                    <ScissorsSquare className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Remove Background</span>
                   </Button>
                 </li>
               </ul>
             </TabsContent>
             <TabsContent value="crop">
               <SheetHeader className="my-4">
-                <SheetTitle className="text-zinc-400 text-sm font-semibold">Cropping & Resizing</SheetTitle>
+                <SheetTitle className="text-zinc-400 text-sm font-semibold">
+                  Cropping & Resizing
+                </SheetTitle>
               </SheetHeader>
               <ul className="grid gap-2">
                 <li>
-                  <Button variant="ghost" className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 border-white`}>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${!crop ? "border-white" : "border-transparent"}`}
+                    onClick={() => setCrop(undefined)}
+                  >
                     <Image className="w-5 h-5 mr-3" />
                     <span className="text-[1.01rem]">Original</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${crop === "square" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setCrop("square")}
+                  >
+                    <Square className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Square</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${crop === "landscape" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setCrop("landscape")}
+                  >
+                    <RectangleHorizontal className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Landscape</span>
+                  </Button>
+                </li>
+
+                <li>
+                  <Button
+                    variant="ghost"
+                    className={`text-left justify-start w-full h-14 border-4 bg-zinc-700 ${crop === "portrait" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setCrop("portrait")}
+                  >
+                    <RectangleVertical className="w-5 h-5 mr-3" />
+                    <span className="text-[1.01rem]">Portrait</span>
                   </Button>
                 </li>
               </ul>
             </TabsContent>
             <TabsContent value="filters">
               <SheetHeader className="my-4">
-                <SheetTitle className="text-zinc-400 text-sm font-semibold">Filters</SheetTitle>
+                <SheetTitle className="text-zinc-400 text-sm font-semibold">
+                  Filters
+                </SheetTitle>
               </SheetHeader>
-              <ul className="grid grid-cols-2 gap-2">
+              <ul className="grid grid-cols-4 sm:grid-cols-3 lg:grid-cols-2 gap-2">
                 <li>
-                  <button className={`w-full border-4 border-white`}>
-                    <img
-                      width={resource.width}
-                      height={resource.height}
-                      src="/icon-1024x1024.png"
+                  <button
+                    className={`w-full border-4 ${!filter ? "border-white" : "border-transparent"}`}
+                    onClick={() => setFilter(undefined)}
+                  >
+                    <CldImage
+                      width={156}
+                      height={156}
+                      crop={"fill"}
+                      src={resource.public_id}
                       alt="No Filter"
+                    />
+                  </button>
+                </li>
+
+                <li>
+                  <button
+                    className={`w-full border-4 ${filter === "sepia" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setFilter("sepia")}
+                  >
+                    <CldImage
+                      width={156}
+                      height={156}
+                      crop={"fill"}
+                      sepia
+                      src={resource.public_id}
+                      alt="Sepia"
+                    />
+                  </button>
+                </li>
+
+                <li>
+                  <button
+                    className={`w-full border-4 ${filter === "sizzle" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setFilter("sizzle")}
+                  >
+                    <CldImage
+                      width={156}
+                      height={156}
+                      crop={"fill"}
+                      art={"sizzle"}
+                      src={resource.public_id}
+                      alt="Sizzle"
+                    />
+                  </button>
+                </li>
+
+                <li>
+                  <button
+                    className={`w-full border-4 ${filter === "grayscale" ? "border-white" : "border-transparent"}`}
+                    onClick={() => setFilter("grayscale")}
+                  >
+                    <CldImage
+                      width={156}
+                      height={156}
+                      crop={"fill"}
+                      grayscale
+                      src={resource.public_id}
+                      alt="Grayscale"
                     />
                   </button>
                 </li>
@@ -180,41 +511,48 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
             </TabsContent>
           </Tabs>
           <SheetFooter className="gap-2 sm:flex-col">
-            <div className="grid grid-cols-[1fr_4rem] gap-2">
-              <Button
-                variant="ghost"
-                className="w-full h-14 text-left justify-center items-center bg-blue-500"
-              >
-                <span className="text-[1.01rem]">
-                  Save
-                </span>
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full h-14 text-left justify-center items-center bg-blue-500"
+            {hasTransformations ? (
+              <div className="grid grid-cols-[1fr_4rem] gap-2">
+                <Button
+                  variant="ghost"
+                  className="w-full h-14 text-left justify-center items-center bg-blue-500"
+                  onClick={() => handleOnSave()}
+                >
+                  <span className="text-[1.01rem]">Save</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="w-full h-14 text-left justify-center items-center bg-blue-500"
+                    >
+                      <span className="sr-only">More Options</span>
+                      <ChevronDown className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-56"
+                    data-exclude-close-on-click={true}
                   >
-                    <span className="sr-only">More Options</span>
-                    <ChevronDown className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" data-exclude-close-on-click={true}>
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <span>Save as Copy</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={handleOnSaveCopy}>
+                        <span>Save as Copy</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : null}
             <Button
               variant="outline"
-              className="w-full h-14 text-left justify-center items-center bg-transparent border-zinc-600"
-              onClick={() => closeMenus()}
+              className={`w-full h-14 text-left justify-center items-center ${hasTransformations ? "bg-red-500" : "bg-transparent border-zinc-600"}`}
+              onClick={() => {
+                discardChanges();
+                closeMenus();
+              }}
             >
               <span className="text-[1.01rem]">
-                Close
+                {hasTransformations ? "Cancel" : "Close"}
               </span>
             </Button>
           </SheetFooter>
@@ -230,14 +568,72 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
           data-exclude-close-on-click={true}
         >
           <SheetHeader className="my-4">
-            <SheetTitle className="text-zinc-200 font-semibold">Info</SheetTitle>
+            <SheetTitle className="text-zinc-200 font-semibold">
+              Info
+            </SheetTitle>
           </SheetHeader>
           <div>
             <ul>
               <li className="mb-3">
-                <strong className="block text-xs font-normal text-zinc-400 mb-1">ID</strong>
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  ID
+                </strong>
                 <span className="flex gap-4 items-center text-zinc-100">
-                  { resource.id }
+                  {resource.public_id}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Date Created
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  {new Date(resource.created_at).toLocaleString()}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Width
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  {addCommas(resource.width)}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Height
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  {addCommas(resource.height)}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Format
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  .{resource.format}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Size
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  {formatBytes(resource.bytes)}
+                </span>
+              </li>
+
+              <li className="mb-3">
+                <strong className="block text-xs font-normal text-zinc-400 mb-1">
+                  Tags
+                </strong>
+                <span className="flex gap-4 items-center text-zinc-100">
+                  {resource.tags.join(", ")}
                 </span>
               </li>
             </ul>
@@ -260,7 +656,10 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
         <div className="flex items-center gap-4">
           <ul>
             <li>
-              <Link href="/" className={`${buttonVariants({ variant: "ghost" })} text-white`}>
+              <Link
+                href="/"
+                className={`${buttonVariants({ variant: "ghost" })} text-white`}
+              >
                 <ChevronLeft className="h-6 w-6" />
                 Back
               </Link>
@@ -269,19 +668,31 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
         </div>
         <ul className="flex items-center gap-4">
           <li>
-            <Button variant="ghost" className="text-white" onClick={() => setFilterSheetIsOpen(true)}>
+            <Button
+              variant="ghost"
+              className="text-white"
+              onClick={() => setFilterSheetIsOpen(true)}
+            >
               <Pencil className="h-6 w-6" />
               <span className="sr-only">Edit</span>
             </Button>
           </li>
           <li>
-            <Button variant="ghost" className="text-white" onClick={() => setInfoSheetIsOpen(true)}>
+            <Button
+              variant="ghost"
+              className="text-white"
+              onClick={() => setInfoSheetIsOpen(true)}
+            >
               <Info className="h-6 w-6" />
               <span className="sr-only">Info</span>
             </Button>
           </li>
           <li>
-            <Button variant="ghost" className="text-white" onClick={() => setDeletion({ state: 'confirm' })}>
+            <Button
+              variant="ghost"
+              className="text-white"
+              onClick={() => setDeletion({ state: "confirm" })}
+            >
               <Trash2 className="h-6 w-6" />
               <span className="sr-only">Delete</span>
             </Button>
@@ -292,17 +703,19 @@ const MediaViewer = ({ resource }: { resource: { id: string; width: number; heig
       {/** Asset viewer */}
 
       <div className="relative flex justify-center items-center align-center w-full h-full">
-        <img
+        <CldImage
+          key={`${JSON.stringify(transformations)}-${version}`}
           className="object-contain"
           width={resource.width}
           height={resource.height}
-          src="/icon-1024x1024.png"
-          alt="Cloudinary Logo"
+          src={resource.secure_url}
+          alt={`Image ${resource.public_id}`}
           style={imgStyles}
+          {...transformations}
         />
       </div>
     </div>
-  )
+  );
 };
 
 export default MediaViewer;

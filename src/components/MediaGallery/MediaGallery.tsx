@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, X, Save } from "lucide-react";
+import {
+  Plus,
+  X,
+  Save,
+  Loader2,
+  SquareStack,
+  Droplet,
+  LayoutPanelLeft,
+} from "lucide-react";
 
 import Container from "@/components/Container";
 import { Button } from "@/components/ui/button";
@@ -22,23 +30,36 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-import { CldImage } from "next-cloudinary";
+// import { CldImage } from "next-cloudinary";
+import CldImage from "@/components/CldImage";
+import { CloudinaryResouce } from "@/types/cloudinary";
 
-interface CloudinaryResouce {
-  height: number;
-  width: number;
-
-  secure_url: string;
-  public_id: string;
-}
+import { useResources } from "@/hooks/use-resources";
+import { getAnimation, getCollage } from "@/lib/creations";
+import { useRouter } from "next/navigation";
+import { getCldImageUrl } from "next-cloudinary";
 
 interface MediaGalleryProps {
   resources: CloudinaryResouce[];
+  tag?: string;
 }
 
-const MediaGallery = ({ resources }: MediaGalleryProps) => {
+interface Creation {
+  state: string;
+  url?: string;
+  type: string;
+}
+
+const MediaGallery = ({
+  resources: initialResources,
+  tag,
+}: MediaGalleryProps) => {
+  const router = useRouter();
+
+  const { resources, addResources } = useResources({ initialResources, tag });
+
   const [selected, setSelected] = useState<Array<string>>([]);
-  const [creation, setCreation] = useState();
+  const [creation, setCreation] = useState<Creation>();
 
   /**
    * handleOnClearSelection
@@ -58,21 +79,116 @@ const MediaGallery = ({ resources }: MediaGalleryProps) => {
     }
   }
 
+  async function handleOnCreateCollage() {
+    setCreation({
+      state: "created",
+      url: getCollage(selected),
+      type: "collage",
+    });
+  }
+
+  async function handleOnSaveCreation() {
+    if (!creation?.url) {
+      return;
+    }
+
+    setCreation((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        state: "saving",
+      };
+    });
+
+    await fetch(creation.url);
+
+    const { data } = await fetch("/api/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        url: creation.url,
+        tags: [String(process.env.NEXT_PUBLIC_CREATIONS_TAG)],
+      }),
+    }).then((res) => res.json());
+
+    addResources([data]);
+    setCreation(undefined);
+    setSelected([]);
+
+    router.push(`/resources/${data.asset_id}`);
+  }
+
+  async function handleOnCreateAnimation() {
+    setCreation({
+      state: "created",
+      url: getAnimation(selected),
+      type: "animation",
+    });
+  }
+
+  async function handleOnCreateColorPop() {
+    setCreation({
+      state: "creating",
+      url: undefined,
+      type: "color-pop",
+    });
+
+    const { url } = await fetch("/api/creations/color-pop", {
+      method: "POST",
+      body: JSON.stringify({
+        publicId: selected[0],
+      }),
+    }).then((res) => res.json());
+
+    setCreation({
+      state: "created",
+      url,
+      type: "color-pop",
+    });
+  }
+
   return (
     <>
       {/** Popup modal used to preview and confirm new creations */}
 
       <Dialog open={!!creation} onOpenChange={handleOnCreationOpenChange}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save your creation?</DialogTitle>
-          </DialogHeader>
-          <DialogFooter className="justify-end sm:justify-end">
-            <Button>
-              <Save className="h-4 w-4 mr-2" />
-              Save to Library
-            </Button>
-          </DialogFooter>
+          {["creating"].includes(creation?.state || "") ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="h-12 w-12 mr-2 animate-spin" />
+            </div>
+          ) : null}
+
+          {["created", "saving"].includes(creation?.state || "") ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Save your creation?</DialogTitle>
+              </DialogHeader>
+              {creation?.url ? (
+                <div>
+                  <CldImage
+                    width={1200}
+                    height={1200}
+                    src={creation.url}
+                    alt={creation.type}
+                    preserveTransformations
+                  />
+                </div>
+              ) : null}
+              <DialogFooter className="justify-end sm:justify-end">
+                <Button
+                  onClick={handleOnSaveCreation}
+                  disabled={creation?.state === "saving"}
+                >
+                  {creation?.state === "saving" ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin disabled:opacity-75" />
+                  ) : null}
+                  <Save className="h-4 w-4 mr-2" />
+                  Save to Library
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 
@@ -104,9 +220,35 @@ const MediaGallery = ({ resources }: MediaGalleryProps) => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56">
                   <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <span>Option</span>
-                    </DropdownMenuItem>
+                    {selected.length > 1 ? (
+                      <DropdownMenuItem
+                        onClick={handleOnCreateCollage}
+                        className="cursor-pointer"
+                      >
+                        <LayoutPanelLeft className="w-4 h-4 mr-2" />
+                        <span>Collage</span>
+                      </DropdownMenuItem>
+                    ) : null}
+
+                    {selected.length === 1 ? (
+                      <DropdownMenuItem
+                        onClick={handleOnCreateAnimation}
+                        className="cursor-pointer"
+                      >
+                        <SquareStack className="w-4 h-4 mr-2" />
+                        <span>Animation</span>
+                      </DropdownMenuItem>
+                    ) : null}
+
+                    {selected.length === 1 ? (
+                      <DropdownMenuItem
+                        onClick={handleOnCreateColorPop}
+                        className="cursor-pointer"
+                      >
+                        <Droplet className="w-4 h-4 mr-2" />
+                        <span>Color Pop</span>
+                      </DropdownMenuItem>
+                    ) : null}
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -158,7 +300,7 @@ const MediaGallery = ({ resources }: MediaGalleryProps) => {
                       </label>
                       <Link
                         className={`block cursor-pointer border-8 transition-[border] ${isChecked ? "border-blue-500" : "border-white"}`}
-                        href="#"
+                        href={`/resources/${resource.asset_id}`}
                       >
                         <CldImage
                           width={resource.width}
